@@ -1,7 +1,7 @@
 # Build Plan (do in order; run /architect before phases 3, 5, 6)
 
 - [x] P1 Scaffold: TS config, eslint, folder structure, env.ts, db.ts, app/server, /health
-- [ ] P2 Models + indexes (comments for each index)
+- [x] P2 Models + indexes (comments for each index)
 - [ ] P3 Auth: login/refresh/logout/me, requireAuth, rate limit, seed admin
 - [ ] P4 Utils + middleware: asyncHandler, ApiError, validate, errorHandler, pagination
 - [ ] P5 Doctors + doctor's patients endpoints
