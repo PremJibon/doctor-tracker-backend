@@ -35,3 +35,7 @@ GET /health -> {status:"ok"}
 
 ## Implemented status
 - [x] GET /health (and /api/health) -> {status:"ok"} [verified with curl]
+- [x] POST /auth/login {email,password} -> {accessToken,user} + sets httpOnly refresh cookie [verified with curl/unit test]
+- [x] POST /auth/refresh cookie -> {accessToken} [verified with unit test]
+- [x] POST /auth/logout clears cookie [verified with unit test]
+- [x] GET /auth/me -> {user} [verified with curl 401 on missing/invalid token]

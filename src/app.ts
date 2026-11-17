@@ -7,6 +7,8 @@ import { env } from "./config/env.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
+import authRoutes from "./routes/auth.routes.js";
+
 const app: Application = express();
 
 // Required behind Render reverse proxy
@@ -42,6 +44,9 @@ const healthHandler = (_req: Request, res: Response) => {
 };
 app.get("/api/health", healthHandler);
 app.get("/health", healthHandler);
+
+// API Routes
+app.use("/api/auth", authRoutes);
 
 // Fallback 404 & centralized error handling
 app.use(notFound);
