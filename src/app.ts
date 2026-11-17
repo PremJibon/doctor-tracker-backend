@@ -8,6 +8,9 @@ import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 import authRoutes from "./routes/auth.routes.js";
+import doctorRoutes from "./routes/doctor.routes.js";
+import patientRoutes from "./routes/patient.routes.js";
+import dashboardRoutes from "./routes/dashboard.routes.js";
 
 const app: Application = express();
 
@@ -47,6 +50,9 @@ app.get("/health", healthHandler);
 
 // API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/doctors", doctorRoutes);
+app.use("/api/patients", patientRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // Fallback 404 & centralized error handling
 app.use(notFound);

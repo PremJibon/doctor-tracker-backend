@@ -1,5 +1,13 @@
+import dns from "node:dns";
 import mongoose from "mongoose";
 import { env } from "./env.js";
+
+// Ensure Node.js resolves MongoDB SRV records via reliable public DNS resolvers
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+} catch {
+  // Ignore if custom DNS cannot be set
+}
 
 export const connectDB = async (): Promise<void> => {
   mongoose.set("autoIndex", env.NODE_ENV !== "production");

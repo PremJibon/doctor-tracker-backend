@@ -4,9 +4,9 @@
 - [x] P2 Models + indexes (comments for each index)
 - [x] P3 Auth: login/refresh/logout/me, requireAuth, rate limit, seed admin
 - [x] P4 Utils + middleware: asyncHandler, ApiError, validate, errorHandler, pagination
-- [ ] P5 Doctors + doctor's patients endpoints
-- [ ] P6 Patients endpoints
-- [ ] P7 Dashboard aggregations
+- [x] P5 Doctors + doctor's patients endpoints
+- [x] P6 Patients endpoints
+- [x] P7 Dashboard aggregations
 - [ ] P8 Seed script (40 doctors, ~1500 patients, 12 months of dates)
 - [ ] P9 Verify: explain() on every list query, 401 tests, error shapes; /review
 - [ ] P10 README, .env.example, Postman/openapi collection, deploy to Render
