@@ -178,7 +178,7 @@ export class DoctorService {
       throw ApiError.notFound("Doctor not found", "DOCTOR_NOT_FOUND");
     }
 
-    const patient = await Patient.findById(patientId);
+    const patient = await Patient.findById(patientId).select("doctorId").lean<IPatientDocument>();
     if (!patient) {
       throw ApiError.notFound("Patient not found", "PATIENT_NOT_FOUND");
     }

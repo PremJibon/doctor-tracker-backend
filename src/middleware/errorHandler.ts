@@ -35,7 +35,16 @@ export const errorHandler = (
       ? err.message
       : "Internal server error";
 
-  console.error("Unhandled error:", err);
+  // Log sanitized error details; never stack traces or secrets to stdout
+  if (env.NODE_ENV === "production") {
+    console.error("Unhandled error:", {
+      code: err instanceof ApiError ? err.code : "INTERNAL_ERROR",
+      statusCode: err instanceof ApiError ? err.statusCode : 500,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  } else {
+    console.error("Unhandled error:", err);
+  }
 
   res.status(500).json({
     error: {

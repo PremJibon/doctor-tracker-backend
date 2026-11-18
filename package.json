@@ -8,7 +8,9 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.ts\""
+    "lint": "eslint \"src/**/*.ts\"",
+    "seed": "tsx src/scripts/seed.ts",
+    "seed:admin": "tsx src/scripts/seedAdmin.ts"
   },
   "keywords": [
     "express",

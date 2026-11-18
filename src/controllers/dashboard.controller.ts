@@ -5,7 +5,7 @@ import { DashboardOverTimeQuery } from "../validators/dashboard.validator.js";
 
 export const getSummary = asyncHandler(async (_req: Request, res: Response) => {
   const summary = await DashboardService.getSummary();
-  res.status(200).json(summary);
+  res.status(200).json({ data: summary });
 });
 
 export const getPatientsPerDoctor = asyncHandler(async (_req: Request, res: Response) => {

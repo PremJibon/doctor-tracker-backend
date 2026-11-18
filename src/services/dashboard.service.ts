@@ -26,6 +26,8 @@ export interface ConditionDistribution {
 export class DashboardService {
   /**
    * Aggregate total counts and average patient load per doctor.
+   * Uses parallel countDocuments for throughput; avg computed dynamically
+   * to avoid storing a denormalized counter that could drift out of sync.
    */
   static async getSummary(): Promise<DashboardSummary> {
     const [totalDoctors, totalPatients] = await Promise.all([
@@ -45,26 +47,33 @@ export class DashboardService {
 
   /**
    * Top 10 doctors ranked by total patient count.
-   * Leverages MongoDB aggregation pipeline with $group, $sort, $limit, and $lookup.
+   * Groups by doctorId first to minimize data before the $lookup join,
+   * then limits to top 10 to avoid loading the full roster into memory.
+   * Preserves patients whose doctor reference is missing (dangling refs)
+   * instead of dropping them, so workload counts remain accurate.
    */
   static async getPatientsPerDoctor(): Promise<PatientsPerDoctor[]> {
     const results = await Patient.aggregate<PatientsPerDoctor>([
-      // Stage 1: Group patients by assigned doctorId and count occurrences
+      // Group patients by assigned doctorId and count occurrences;
+      // done before $lookup to reduce the working set joined against doctors.
       {
         $group: {
           _id: "$doctorId",
           count: { $sum: 1 },
         },
       },
-      // Stage 2: Sort descending so doctors with the highest caseload appear first
+      // Sort descending so doctors with the highest caseload appear first;
+      // required before $limit to guarantee we keep the true top 10.
       {
         $sort: { count: -1 },
       },
-      // Stage 3: Restrict to top 10 doctors
+      // Restrict to top 10 doctors to bound response size and lookup cost.
       {
         $limit: 10,
       },
-      // Stage 4: Join doctor collection to retrieve doctor's full name
+      // Left outer join to doctor collection to retrieve doctor's full name.
+      // Use preserveNullAndEmptyArrays so patients with a missing doctor ref
+      // are not silently dropped from workload counts.
       {
         $lookup: {
           from: "doctors",
@@ -73,15 +82,19 @@ export class DashboardService {
           as: "doctor",
         },
       },
-      // Stage 5: Unwind joined doctor array
+      // Unwind the joined doctor array; preserveNullAndEmptyArrays keeps
+      // documents with no matching doctor rather than discarding them.
       {
-        $unwind: "$doctor",
+        $unwind: {
+          path: "$doctor",
+          preserveNullAndEmptyArrays: true,
+        },
       },
-      // Stage 6: Project clean response shape
+      // Project clean response shape; fall back to doctorId string when name is missing.
       {
         $project: {
           doctorId: { $toString: "$_id" },
-          name: "$doctor.name",
+          name: { $ifNull: ["$doctor.name", "Unknown Doctor"] },
           count: 1,
           _id: 0,
         },

@@ -26,7 +26,7 @@ PATCH  /patients/:id
 DELETE /patients/:id
 
 ## Dashboard
-GET /dashboard/summary                -> {totalDoctors,totalPatients,avgPatientsPerDoctor}
+GET /dashboard/summary                -> {data:{totalDoctors,totalPatients,avgPatientsPerDoctor}}
 GET /dashboard/patients-per-doctor    -> top 10 [{doctorId,name,count}]
 GET /dashboard/patients-over-time     ?range=7d|30d|12m -> [{date,count}]
 GET /dashboard/conditions             -> [{condition,count}]

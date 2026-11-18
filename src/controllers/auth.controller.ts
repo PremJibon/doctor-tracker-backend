@@ -3,20 +3,25 @@ import { AuthService } from "../services/auth.service.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { env } from "../config/env.js";
 
+const ACCESS_COOKIE_NAME = "accessToken";
 const REFRESH_COOKIE_NAME = "refreshToken";
 
-const getCookieOptions = () => ({
+const getCookieOptions = (maxAge: number) => ({
   httpOnly: true,
   secure: env.NODE_ENV === "production",
   sameSite: (env.NODE_ENV === "production" ? "none" : "lax") as "none" | "lax",
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  maxAge,
   path: "/api/auth",
 });
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const result = await AuthService.login(req.body);
 
-  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getCookieOptions());
+  res.cookie(ACCESS_COOKIE_NAME, result.accessToken, {
+    ...getCookieOptions(15 * 60 * 1000),
+    path: "/",
+  });
+  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getCookieOptions(7 * 24 * 60 * 60 * 1000));
 
   res.status(200).json({
     accessToken: result.accessToken,
@@ -28,12 +33,24 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
   const token = (req.cookies as Record<string, string | undefined>)[REFRESH_COOKIE_NAME];
   const result = await AuthService.refresh(token || "");
 
+  res.cookie(ACCESS_COOKIE_NAME, result.accessToken, {
+    ...getCookieOptions(15 * 60 * 1000),
+    path: "/",
+  });
+  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getCookieOptions(7 * 24 * 60 * 60 * 1000));
+
   res.status(200).json({
     accessToken: result.accessToken,
   });
 });
 
 export const logout = asyncHandler(async (_req: Request, res: Response) => {
+  const userId = (_req as Request & { user?: { sub?: string } }).user?.sub;
+  if (userId) {
+    await AuthService.revoke(userId);
+  }
+
+  res.clearCookie(ACCESS_COOKIE_NAME, { httpOnly: true, secure: env.NODE_ENV === "production", path: "/" });
   res.clearCookie(REFRESH_COOKIE_NAME, {
     httpOnly: true,
     secure: env.NODE_ENV === "production",

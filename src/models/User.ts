@@ -5,6 +5,8 @@ export interface IUser {
   email: string;
   passwordHash: string;
   role: "admin";
+  refreshTokenJti?: string | null;
+  refreshTokenVersion?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,6 +38,14 @@ const userSchema = new Schema<IUserDocument>(
       default: "admin",
       required: true,
     },
+    refreshTokenJti: {
+      type: String,
+      default: null,
+    },
+    refreshTokenVersion: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -50,6 +60,6 @@ const userSchema = new Schema<IUserDocument>(
 );
 
 // Index: unique email index for login lookups and preventing duplicate accounts
-userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ email: 1 }, { unique: true, name: "idx_users_email_unique" });
 
 export const User: Model<IUserDocument> = model<IUserDocument>("User", userSchema);

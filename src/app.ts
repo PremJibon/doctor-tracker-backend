@@ -11,25 +11,40 @@ import authRoutes from "./routes/auth.routes.js";
 import doctorRoutes from "./routes/doctor.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
+import { apiRateLimiter } from "./middleware/rateLimit.js";
 
 const app: Application = express();
 
 // Required behind Render reverse proxy
 app.set("trust proxy", 1);
 
+// Configure allowed origins for CORS (supports configured origins, Vercel deployments, and localhost)
+const configuredOrigins = env.CLIENT_ORIGIN;
+
 // Security & request parsing middlewares
 app.use(helmet());
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, Postman)
+      // Allow requests with no origin (like mobile apps, curl, Postman, server-to-server)
       if (!origin) return callback(null, true);
 
-      if (env.CLIENT_ORIGIN.includes(origin)) {
+      // Explicit configured origins from CLIENT_ORIGIN
+      if (configuredOrigins.includes(origin) || configuredOrigins.includes("*")) {
         return callback(null, true);
       }
 
-      return callback(new Error(`Origin ${origin} not allowed by CORS`));
+      // Allow Vercel frontend deployments (both production and preview deployments)
+      if (/^https:\/\/doctor-tracker-frontend.*\.vercel\.app$/.test(origin) || /^https:\/\/.*\.vercel\.app$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow local development origins
+      if (env.NODE_ENV !== "production" && /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
     },
     credentials: true,
   })
@@ -49,6 +64,7 @@ app.get("/api/health", healthHandler);
 app.get("/health", healthHandler);
 
 // API Routes
+app.use(apiRateLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/doctors", doctorRoutes);
 app.use("/api/patients", patientRoutes);

@@ -1,0 +1,806 @@
+openapi: 3.0.3
+info:
+  title: Doctor Tracker API
+  version: 1.0.0
+  description: >
+    Production-grade Express + TypeScript + MongoDB REST API backend for the Doctor Tracker
+    clinical management portal. Features role-based JWT auth with rotation, index-backed prefix
+    search, high-performance aggregation pipelines, and comprehensive request validation.
+servers:
+  - url: http://localhost:5000/api
+    description: Local development server
+  - url: https://doctor-tracker-backend.onrender.com/api
+    description: Production server (Render)
+
+tags:
+  - name: Health
+    description: Service heartbeat and readiness probes
+  - name: Auth
+    description: Authentication, token refresh, session revocation, and current user
+  - name: Doctors
+    description: Doctor registry, search, filtering, and doctor-patient sub-rosters
+  - name: Patients
+    description: Patient registry, search, filtering, and admissions
+  - name: Dashboard
+    description: Aggregated clinical metrics, KPI summaries, and time-series admissions
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check endpoint
+      description: Returns service availability status. Does not require authentication.
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate administrator
+      description: >
+        Validates email and password using constant-time comparison. Returns a 15-minute access token
+        in the JSON response and sets a 7-day HttpOnly, SameSite=None, Secure refresh token cookie.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              additionalProperties: false
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@doctor-tracker.com
+                password:
+                  type: string
+                  minLength: 8
+                  example: AdminPassword123!
+      responses:
+        "200":
+          description: Successful authentication
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: refreshToken=...; Path=/api/auth; HttpOnly; Secure; SameSite=None
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/InvalidCredentials"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      description: >
+        Rotates the refresh token (preventing replay attacks) and issues a fresh 15-minute access token.
+        Requires the HttpOnly refreshToken cookie.
+      responses:
+        "200":
+          description: Token refreshed successfully
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: refreshToken=...; Path=/api/auth; HttpOnly; Secure; SameSite=None
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Terminate session
+      description: Revokes the active refresh token and clears all authentication cookies.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Successfully logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Current authenticated user profile
+      description: Returns the authenticated admin profile. Password hash is never exposed.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/UserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /doctors:
+    get:
+      tags: [Doctors]
+      summary: List and search doctors
+      description: >
+        Returns paginated doctors with anchored prefix search (IXSCAN on nameLower),
+        specialization and hospital filters, and date range filters.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: specialization
+          in: query
+          schema:
+            type: string
+        - name: hospital
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name:asc, name:desc, createdAt:asc, createdAt:desc]
+            default: createdAt:desc
+      responses:
+        "200":
+          description: Paginated doctors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Doctor"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+    post:
+      tags: [Doctors]
+      summary: Create a new doctor
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, specialization, hospital, phone, email]
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  example: Dr. Rafiqul Islam
+                specialization:
+                  type: string
+                  example: Cardiology
+                hospital:
+                  type: string
+                  example: Square Hospital
+                phone:
+                  type: string
+                  example: "+8801712345678"
+                email:
+                  type: string
+                  format: email
+                  example: rafiqul.islam.new@careguide.bd
+      responses:
+        "201":
+          description: Doctor created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Doctor"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /doctors/{id}:
+    get:
+      tags: [Doctors]
+      summary: Retrieve doctor details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Doctor details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Doctor"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /doctors/{id}/patients:
+    get:
+      tags: [Doctors]
+      summary: List patients assigned to doctor
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Assigned patients
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Patient"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+
+    post:
+      tags: [Doctors]
+      summary: Assign or admit new patient to doctor
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, age, gender, phone, condition]
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  example: Farzana Akter
+                age:
+                  type: integer
+                  minimum: 0
+                  maximum: 130
+                  example: 34
+                gender:
+                  type: string
+                  enum: [Male, Female, Other]
+                  example: Female
+                phone:
+                  type: string
+                  example: "+8801812345678"
+                condition:
+                  type: string
+                  example: Hypertension
+                admittedAt:
+                  type: string
+                  format: date-time
+      responses:
+        "201":
+          description: Patient assigned to doctor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Patient"
+
+  /doctors/{id}/patients/{patientId}:
+    delete:
+      tags: [Doctors]
+      summary: Discharge or remove patient from doctor
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Patient removed from doctor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Patient successfully removed from doctor
+
+  /patients:
+    get:
+      tags: [Patients]
+      summary: List and search patients
+      description: Paginated patient roster with search, condition, doctorId, and admission date filters.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: condition
+          in: query
+          schema:
+            type: string
+        - name: doctorId
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name:asc, name:desc, admittedAt:asc, admittedAt:desc, createdAt:asc, createdAt:desc]
+            default: admittedAt:desc
+      responses:
+        "200":
+          description: Paginated patient list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Patient"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+
+  /patients/{id}:
+    patch:
+      tags: [Patients]
+      summary: Update patient record
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                age:
+                  type: integer
+                gender:
+                  type: string
+                  enum: [Male, Female, Other]
+                phone:
+                  type: string
+                condition:
+                  type: string
+                doctorId:
+                  type: string
+                admittedAt:
+                  type: string
+                  format: date-time
+      responses:
+        "200":
+          description: Patient updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Patient"
+
+    delete:
+      tags: [Patients]
+      summary: Delete patient record
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Patient deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Patient deleted successfully
+
+  /dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Summary counts and metrics
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Aggregated KPI counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      totalDoctors:
+                        type: integer
+                        example: 40
+                      totalPatients:
+                        type: integer
+                        example: 1500
+                      avgPatientsPerDoctor:
+                        type: number
+                        example: 37.5
+
+  /dashboard/patients-per-doctor:
+    get:
+      tags: [Dashboard]
+      summary: Top 10 doctors by patient load
+      description: Native MongoDB aggregation pipeline ($group -> $sort -> $limit: 10 -> $lookup -> $project).
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Top 10 doctors ranked by patient count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        doctorId:
+                          type: string
+                        name:
+                          type: string
+                        count:
+                          type: integer
+
+  /dashboard/patients-over-time:
+    get:
+      tags: [Dashboard]
+      summary: Patient admissions over time
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: range
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [7d, 30d, 12m]
+            example: 30d
+      responses:
+        "200":
+          description: Time-series admissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          example: "2026-11-15"
+                        count:
+                          type: integer
+                          example: 12
+
+  /dashboard/conditions:
+    get:
+      tags: [Dashboard]
+      summary: Patient condition distribution
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Condition counts ranked descending
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        condition:
+                          type: string
+                          example: Hypertension
+                        count:
+                          type: integer
+                          example: 105
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 65f1a2b3c4d5e6f7a8b9c0d1
+        email:
+          type: string
+          example: admin@doctor-tracker.com
+        role:
+          type: string
+          example: admin
+        createdAt:
+          type: string
+          format: date-time
+
+    Doctor:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        specialization:
+          type: string
+        hospital:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Patient:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        age:
+          type: integer
+        gender:
+          type: string
+        phone:
+          type: string
+        condition:
+          type: string
+        doctorId:
+          type: string
+        admittedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          example: 1500
+        totalPages:
+          type: integer
+          example: 150
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              example: Invalid input data
+            details:
+              type: array
+              items:
+                type: object
+
+  responses:
+    ValidationError:
+      description: Invalid query, parameters, or request body
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthenticated:
+      description: Authentication required or invalid/expired token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InvalidCredentials:
+      description: Invalid email or password
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Requested entity does not exist
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Resource conflict (e.g. duplicate email)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Too many requests from this IP
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
