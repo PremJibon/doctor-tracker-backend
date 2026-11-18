@@ -44,7 +44,7 @@ export const doctorQuerySchema = z
 export const createDoctorPatientSchema = z
   .object({
     name: z.string({ required_error: "Patient name is required" }).min(2).trim(),
-    age: z.coerce.number().int().min(0, "Age cannot be negative"),
+    age: z.coerce.number().int().min(0, "Age cannot be negative").max(150, "Age cannot exceed 150"),
     gender: z.enum(["Male", "Female", "Other", "male", "female", "other"]),
     phone: z.string({ required_error: "Phone number is required" }).min(5).trim(),
     condition: z.string({ required_error: "Medical condition is required" }).min(2).trim(),

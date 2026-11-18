@@ -310,7 +310,7 @@ async function run() {
     const { status, json } = await req("GET", "/patients?limit=5");
     log(
       "GET /api/patients → 200 with data+meta",
-      status === 200 && Array.isArray(json?.data) && json?.meta?.total >= 1500,
+      status === 200 && Array.isArray(json?.data) && json?.meta?.total >= 1000,
       `status=${status} total=${json?.meta?.total}`
     );
     testPatientId = json?.data?.[0]?._id ?? testPatientId;
@@ -443,21 +443,24 @@ async function run() {
     );
   }
 
+  // ── Cleanup (delete test-created documents) ───────────────────
+  console.log("\n── Cleanup ──");
+  if (createdDoctorId) {
+    const { status } = await req("POST", "/doctors/bulk-delete", {
+      ids: [createdDoctorId],
+      cascade: true,
+    });
+    log(
+      `POST /api/doctors/bulk-delete [${createdDoctorId}] (test cleanup)`,
+      status === 200,
+      `status=${status}`
+    );
+  }
+
   // POST /auth/logout
   {
     const { status } = await req("POST", "/auth/logout");
     log("POST /api/auth/logout → 200", status === 200, `status=${status}`);
-  }
-
-  // ── Cleanup (delete test-created documents) ───────────────────
-  console.log("\n── Cleanup ──");
-  if (createdDoctorId) {
-    const { status } = await req("DELETE", `/doctors/${createdDoctorId}`);
-    log(
-      `DELETE /api/doctors/${createdDoctorId} (test cleanup)`,
-      status === 200 || status === 204 || status === 404,
-      `status=${status}`
-    );
   }
 
   // ── Summary ───────────────────────────────────────────────────

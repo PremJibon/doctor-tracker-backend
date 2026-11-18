@@ -275,6 +275,75 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /doctors/bulk-delete:
+    post:
+      tags: [Doctors]
+      summary: Bulk delete doctors
+      description: >
+        Deletes multiple doctors by ID list (1-100 IDs). If cascade is false (default),
+        doctors with active patient records are skipped with reason HAS_PATIENTS.
+        If cascade is true, all assigned patients are cascaded and deleted before the doctor.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              additionalProperties: false
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  maxItems: 100
+                  example: ["6afd4316d5c150e2898780eb"]
+                cascade:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Bulk delete outcome
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      requested:
+                        type: integer
+                      deleted:
+                        type: integer
+                      deletedPatients:
+                        type: integer
+                      skipped:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                            reason:
+                              type: string
+                              example: HAS_PATIENTS
+                            patientCount:
+                              type: integer
+                      notFound:
+                        type: array
+                        items:
+                          type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
   /doctors/{id}:
     get:
       tags: [Doctors]
@@ -485,6 +554,55 @@ paths:
                   meta:
                     $ref: "#/components/schemas/PaginationMeta"
 
+  /patients/bulk-delete:
+    post:
+      tags: [Patients]
+      summary: Bulk delete patients
+      description: >
+        Deletes multiple patients by ID list (1-100 IDs) in a single atomic deleteMany operation.
+        IDs are deduplicated automatically. Non-existent IDs are returned in notFound.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              additionalProperties: false
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  maxItems: 100
+                  example: ["6afd4316d5c150e2898780eb"]
+      responses:
+        "200":
+          description: Bulk delete outcome
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      requested:
+                        type: integer
+                      deleted:
+                        type: integer
+                      notFound:
+                        type: array
+                        items:
+                          type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
   /patients/{id}:
     patch:
       tags: [Patients]
@@ -581,6 +699,15 @@ paths:
                       avgPatientsPerDoctor:
                         type: number
                         example: 37.5
+                      admissionsLast30d:
+                        type: integer
+                        example: 120
+                      admissionsPrev30d:
+                        type: integer
+                        example: 110
+                      newDoctorsLast30d:
+                        type: integer
+                        example: 5
 
   /dashboard/patients-per-doctor:
     get:
@@ -608,6 +735,12 @@ paths:
                           type: string
                         count:
                           type: integer
+                        specialization:
+                          type: string
+                          nullable: true
+                        hospital:
+                          type: string
+                          nullable: true
 
   /dashboard/patients-over-time:
     get:
@@ -668,6 +801,166 @@ paths:
                         count:
                           type: integer
                           example: 105
+
+  /dashboard/gender:
+    get:
+      tags: [Dashboard]
+      summary: Patient gender distribution
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Patient count by gender
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        gender:
+                          type: string
+                          example: Male
+                        count:
+                          type: integer
+                          example: 780
+
+  /dashboard/age-groups:
+    get:
+      tags: [Dashboard]
+      summary: Patient distribution across age buckets
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Patient count by age group (0-17, 18-34, 35-49, 50-64, 65+)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ageGroup:
+                          type: string
+                          example: 18-34
+                        count:
+                          type: integer
+                          example: 412
+
+  /dashboard/specialties:
+    get:
+      tags: [Dashboard]
+      summary: Top 8 specializations by doctor count
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Doctor and patient counts by specialty
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        specialization:
+                          type: string
+                          example: Cardiology
+                        doctors:
+                          type: integer
+                          example: 8
+                        patients:
+                          type: integer
+                          example: 310
+
+  /dashboard/hospitals:
+    get:
+      tags: [Dashboard]
+      summary: Top 5 hospitals by doctor count
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Doctor and patient counts by hospital
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        hospital:
+                          type: string
+                          example: Dhaka Medical College Hospital
+                        doctors:
+                          type: integer
+                          example: 12
+                        patients:
+                          type: integer
+                          example: 450
+
+  /dashboard/recent-admissions:
+    get:
+      tags: [Dashboard]
+      summary: Most recently admitted patients
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 8
+      responses:
+        "200":
+          description: Recent admissions with joined doctor info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        name:
+                          type: string
+                        age:
+                          type: integer
+                        gender:
+                          type: string
+                        condition:
+                          type: string
+                        admittedAt:
+                          type: string
+                          format: date-time
+                        doctorId:
+                          type: string
+                          nullable: true
+                        doctorName:
+                          type: string
+                          nullable: true
+                        doctorSpecialization:
+                          type: string
+                          nullable: true
 
 components:
   securitySchemes:

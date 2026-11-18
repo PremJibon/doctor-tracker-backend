@@ -12,6 +12,7 @@
 - [x] P8 Seed script: 1 Admin, 40 Doctors, ~1,500 Patients spanning 12 months of admission dates; idempotent re-run support
 - [x] P9 Verify: explain("executionStats") on every list query (IXSCAN not COLLSCAN), 401 tests, error shapes, then /review
 - [x] P10 README, setup guide, `.env.example`, system architecture doc, 2 technical-decision deep dives, IXSCAN evidence, Postman/OpenAPI collection, deploy to Render
+- [x] P11 Bulk Delete & Dashboard Extensions: POST /patients/bulk-delete, POST /doctors/bulk-delete (safe cascade transaction/fallback), extended dashboard summary, top 10 with hospital/specialty, gender, age-groups ($bucket), specialties (top 8), hospitals (top 5), recent-admissions (bounded lookup); 52/52 verification tests pass with 0 leaked records
 
 ## Done Detail (matches PRD §3 & §4)
 
@@ -128,3 +129,36 @@
 - `http://localhost:3000` → `Access-Control-Allow-Origin: http://localhost:3000` ✅
 - Login response: 1 cookie (`refreshToken` only), `accessToken` in body ✅
 - 34/34 tests passed ✅
+
+## Phase 11: Bulk Delete & Dashboard Analytics Extensions (2026-11-18)
+
+### Bulk Delete Endpoints
+1. `POST /api/patients/bulk-delete`
+   - Body: `{ ids: string[] }` (1–100 valid ObjectIds, deduplicated with `Set`)
+   - Single `deleteMany({ _id: { $in: objectIds } })` call backed by primary key index
+   - Response: `200 { data: { requested, deleted, notFound: string[] } }`
+   - Validation: 400 VALIDATION_ERROR on malformed ObjectIds, empty array, or >100 IDs
+   - Route order: placed **before** `/:id` to prevent route shadowing
+
+2. `POST /api/doctors/bulk-delete`
+   - Body: `{ ids: string[], cascade?: boolean }` (default `cascade: false`)
+   - `cascade=false`: doctors with active patients are skipped with reason `"HAS_PATIENTS"`
+   - `cascade=true`: deletes patients first, then doctors
+   - Transaction strategy: attempts multi-document transaction session; if standalone/M0 throws replica set error, safely executes sequential `deleteMany` (patients first to prevent orphan records)
+   - Response: `200 { data: { requested, deleted, deletedPatients, skipped: [{ id, name, reason, patientCount }], notFound: string[] } }`
+   - Route order: placed **before** `/:id`
+
+### Dashboard Additions (Additive Only)
+1. `GET /api/dashboard/summary`: Added `admissionsLast30d`, `admissionsPrev30d`, `newDoctorsLast30d` alongside existing metrics.
+2. `GET /api/dashboard/patients-per-doctor`: Added `specialization` and `hospital` to each doctor item.
+3. `GET /api/dashboard/gender`: `[{ gender, count }]`
+4. `GET /api/dashboard/age-groups`: `[{ ageGroup, count }]` using MongoDB `$bucket` across `[0, 18, 35, 50, 65, 200]`.
+5. `GET /api/dashboard/specialties`: Top 8 specializations by doctor count with patient sub-pipeline count.
+6. `GET /api/dashboard/hospitals`: Top 5 hospitals by doctor count with patient sub-pipeline count.
+7. `GET /api/dashboard/recent-admissions`: Top-N recent patients (default 8, max 20) with `$lookup` to doctors executed **after** `$limit` for maximum index efficiency.
+
+### Data & Code Quality
+- Added `.max(150)` validation to patient age in `createDoctorPatientSchema`.
+- Full verification suite `src/scripts/verifyBulkAndDashboard.mjs`: 52/52 assertions passed.
+- Database records count before and after tests: perfectly identical (Doctors = 45, Patients = 1499). No leaked records.
+- E2E test suite `src/scripts/apiTest.mjs`: 34/34 passed. Test cleanup uses `POST /doctors/bulk-delete` with `cascade: true`.

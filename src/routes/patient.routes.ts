@@ -7,6 +7,8 @@ import {
   patientIdParamsSchema,
 } from "../validators/patient.validator.js";
 import { listPatients, updatePatient, deletePatient } from "../controllers/patient.controller.js";
+import { bulkDeletePatientsSchema } from "../validators/bulkDelete.validator.js";
+import { bulkDeletePatientsController } from "../controllers/bulkDelete.controller.js";
 
 const router = Router();
 
@@ -14,6 +16,14 @@ router.use(requireAuth);
 
 // GET /api/patients
 router.get("/", validate({ query: listPatientsQuerySchema }), listPatients);
+
+// POST /api/patients/bulk-delete
+// Must be registered BEFORE /:id to prevent Express treating "bulk-delete" as an ObjectId param.
+router.post(
+  "/bulk-delete",
+  validate({ body: bulkDeletePatientsSchema }),
+  bulkDeletePatientsController
+);
 
 // PATCH /api/patients/:id
 router.patch(

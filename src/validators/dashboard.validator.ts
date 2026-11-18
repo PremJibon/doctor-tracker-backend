@@ -7,3 +7,11 @@ export const dashboardOverTimeQuerySchema = z
   .strict();
 
 export type DashboardOverTimeQuery = z.infer<typeof dashboardOverTimeQuerySchema>;
+
+export const recentAdmissionsQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(20).default(8),
+  })
+  .strict();
+
+export type RecentAdmissionsQuery = z.infer<typeof recentAdmissionsQuerySchema>;

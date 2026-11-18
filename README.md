@@ -166,6 +166,7 @@ Errors propagate upward and are caught by the central `errorHandler` middleware,
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/doctors` | Create a new doctor |
+| `POST` | `/doctors/bulk-delete` | Bulk delete doctors (body: `{ ids: string[], cascade?: boolean }`) |
 | `GET` | `/doctors` | List doctors (search, filters, pagination) |
 | `GET` | `/doctors/:id` | Get a single doctor by ID |
 | `GET` | `/doctors/:id/patients` | List a doctor's patients (paginated, searchable) |
@@ -190,6 +191,7 @@ Errors propagate upward and are caught by the central `errorHandler` middleware,
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/patients` | List all patients (search, filters, pagination) |
+| `POST` | `/patients/bulk-delete` | Bulk delete patients (body: `{ ids: string[] }`, max 100) |
 | `PATCH` | `/patients/:id` | Update a patient (partial) |
 | `DELETE` | `/patients/:id` | Delete a patient record |
 
@@ -210,10 +212,15 @@ Errors propagate upward and are caught by the central `errorHandler` middleware,
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/dashboard/summary` | Total doctors, patients, avg patients per doctor |
-| `GET` | `/dashboard/patients-per-doctor` | Top 10 doctors by patient count |
+| `GET` | `/dashboard/summary` | Total doctors, patients, avg load, 30d trends, new doctors |
+| `GET` | `/dashboard/patients-per-doctor` | Top 10 doctors with specialization and hospital |
 | `GET` | `/dashboard/patients-over-time` | Patient admissions over time (`?range=7d\|30d\|12m`) |
 | `GET` | `/dashboard/conditions` | Patient count per medical condition |
+| `GET` | `/dashboard/gender` | Patient distribution by gender (`[{ gender, count }]`) |
+| `GET` | `/dashboard/age-groups` | Patient distribution across age brackets (`[{ ageGroup, count }]`) |
+| `GET` | `/dashboard/specialties` | Top 8 specialties ranked by doctor count with patient totals |
+| `GET` | `/dashboard/hospitals` | Top 5 hospitals ranked by doctor count with patient totals |
+| `GET` | `/dashboard/recent-admissions` | Most recent admissions (`?limit=1..20`, default 8) with doctor details |
 
 ### Health
 

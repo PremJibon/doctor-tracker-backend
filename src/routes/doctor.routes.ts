@@ -16,6 +16,8 @@ import {
   addDoctorPatient,
   deleteDoctorPatient,
 } from "../controllers/doctor.controller.js";
+import { bulkDeleteDoctorsSchema } from "../validators/bulkDelete.validator.js";
+import { bulkDeleteDoctorsController } from "../controllers/bulkDelete.controller.js";
 
 const router = Router();
 
@@ -27,6 +29,14 @@ router.post("/", validate({ body: createDoctorSchema }), createDoctor);
 
 // GET /api/doctors
 router.get("/", validate({ query: doctorQuerySchema }), getDoctors);
+
+// POST /api/doctors/bulk-delete
+// Must be registered BEFORE /:id to prevent Express treating "bulk-delete" as an ObjectId param.
+router.post(
+  "/bulk-delete",
+  validate({ body: bulkDeleteDoctorsSchema }),
+  bulkDeleteDoctorsController
+);
 
 // GET /api/doctors/:id
 router.get("/:id", validate({ params: doctorIdParamSchema }), getDoctorById);
