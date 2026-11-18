@@ -7,9 +7,9 @@ Base: /api   Auth: Bearer access token on everything except login, refresh, heal
 Status codes: 400 validation, 401 unauthenticated, 403 forbidden, 404 not found, 409 conflict, 429 rate limit, 500 unexpected.
 
 ## Auth
-POST /auth/login     {email,password} -> {accessToken,user}  + sets httpOnly refresh cookie
-POST /auth/refresh   cookie -> {accessToken}
-POST /auth/logout    clears cookie
+POST /auth/login     {email,password} -> {accessToken,user}  + sets httpOnly refreshToken cookie (path /api/auth). Access token in body ONLY — no accessToken cookie.
+POST /auth/refresh   httpOnly refreshToken cookie -> {accessToken} + rotates refreshToken cookie. Returns 403 if Origin present and not allowlisted.
+POST /auth/logout    clears refreshToken cookie. Returns 403 if Origin present and not allowlisted.
 GET  /auth/me        -> {user}
 
 ## Doctors
@@ -35,9 +35,9 @@ GET /health -> {status:"ok"}
 
 ## Implemented status
 - [x] GET /health (and /api/health) -> {status:"ok"} [verified with curl]
-- [x] POST /auth/login {email,password} -> {accessToken,user} + sets httpOnly refresh cookie [verified with curl/unit test]
-- [x] POST /auth/refresh cookie -> {accessToken} [verified with unit test]
-- [x] POST /auth/logout clears cookie [verified with unit test]
+- [x] POST /auth/login {email,password} -> {accessToken,user} + sets httpOnly refreshToken cookie (path /api/auth). Access token in JSON body, NOT a cookie. [verified with curl/unit test]
+- [x] POST /auth/refresh httpOnly refreshToken cookie -> {accessToken} + rotates refreshToken cookie. 403 on non-allowlisted Origin. [verified with curl]
+- [x] POST /auth/logout clears refreshToken cookie. 403 on non-allowlisted Origin. [verified with curl]
 - [x] GET /auth/me -> {user} [verified with curl 401 on missing/invalid token]
 - [x] POST /doctors body: name, specialization, hospital, phone, email [verified live]
 - [x] GET /doctors ?page&limit&search&specialization&hospital&from&to&sort [verified live]

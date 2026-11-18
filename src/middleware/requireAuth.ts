@@ -13,20 +13,13 @@ declare global {
 }
 
 export const requireAuth = (req: Request, _res: Response, next: NextFunction): void => {
-  let token: string | undefined;
-
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    token = authHeader.split(" ")[1];
-  } else {
-    // Fall back to HttpOnly access token cookie for browser clients
-    token = (req.cookies as Record<string, string | undefined>)?.accessToken;
-  }
-
-  if (!token) {
+  if (!authHeader?.startsWith("Bearer ")) {
     next(ApiError.unauthenticated("Authentication required. Bearer token missing.", "UNAUTHENTICATED"));
     return;
   }
+
+  const token = authHeader.split(" ")[1];
 
   try {
     const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as TokenPayload;

@@ -6,6 +6,7 @@ import morgan from "morgan";
 import { env } from "./config/env.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { isOriginAllowed } from "./middleware/corsGuard.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import doctorRoutes from "./routes/doctor.routes.js";
@@ -18,32 +19,14 @@ const app: Application = express();
 // Required behind Render reverse proxy
 app.set("trust proxy", 1);
 
-// Configure allowed origins for CORS (supports configured origins, Vercel deployments, and localhost)
-const configuredOrigins = env.CLIENT_ORIGIN;
-
 // Security & request parsing middlewares
 app.use(helmet());
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, Postman, server-to-server)
+      // Allow requests with no origin (curl, Postman, server-to-server)
       if (!origin) return callback(null, true);
-
-      // Explicit configured origins from CLIENT_ORIGIN
-      if (configuredOrigins.includes(origin) || configuredOrigins.includes("*")) {
-        return callback(null, true);
-      }
-
-      // Allow Vercel frontend deployments (both production and preview deployments)
-      if (/^https:\/\/doctor-tracker-frontend.*\.vercel\.app$/.test(origin) || /^https:\/\/.*\.vercel\.app$/.test(origin)) {
-        return callback(null, true);
-      }
-
-      // Allow local development origins
-      if (env.NODE_ENV !== "production" && /^http:\/\/localhost(:\d+)?$/.test(origin)) {
-        return callback(null, true);
-      }
-
+      if (isOriginAllowed(origin)) return callback(null, true);
       return callback(null, false);
     },
     credentials: true,

@@ -3,25 +3,20 @@ import { AuthService } from "../services/auth.service.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { env } from "../config/env.js";
 
-const ACCESS_COOKIE_NAME = "accessToken";
 const REFRESH_COOKIE_NAME = "refreshToken";
 
-const getCookieOptions = (maxAge: number) => ({
+const getRefreshCookieOptions = () => ({
   httpOnly: true,
   secure: env.NODE_ENV === "production",
   sameSite: (env.NODE_ENV === "production" ? "none" : "lax") as "none" | "lax",
-  maxAge,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
   path: "/api/auth",
 });
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const result = await AuthService.login(req.body);
 
-  res.cookie(ACCESS_COOKIE_NAME, result.accessToken, {
-    ...getCookieOptions(15 * 60 * 1000),
-    path: "/",
-  });
-  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getCookieOptions(7 * 24 * 60 * 60 * 1000));
+  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getRefreshCookieOptions());
 
   res.status(200).json({
     accessToken: result.accessToken,
@@ -33,11 +28,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
   const token = (req.cookies as Record<string, string | undefined>)[REFRESH_COOKIE_NAME];
   const result = await AuthService.refresh(token || "");
 
-  res.cookie(ACCESS_COOKIE_NAME, result.accessToken, {
-    ...getCookieOptions(15 * 60 * 1000),
-    path: "/",
-  });
-  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getCookieOptions(7 * 24 * 60 * 60 * 1000));
+  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getRefreshCookieOptions());
 
   res.status(200).json({
     accessToken: result.accessToken,
@@ -50,7 +41,6 @@ export const logout = asyncHandler(async (_req: Request, res: Response) => {
     await AuthService.revoke(userId);
   }
 
-  res.clearCookie(ACCESS_COOKIE_NAME, { httpOnly: true, secure: env.NODE_ENV === "production", path: "/" });
   res.clearCookie(REFRESH_COOKIE_NAME, {
     httpOnly: true,
     secure: env.NODE_ENV === "production",

@@ -68,12 +68,13 @@ paths:
                   example: AdminPassword123!
       responses:
         "200":
-          description: Successful authentication
+          description: Successful authentication. Access token is returned in the JSON body only (not a cookie). The httpOnly refreshToken cookie is set for use with /auth/refresh.
           headers:
             Set-Cookie:
               schema:
                 type: string
                 example: refreshToken=...; Path=/api/auth; HttpOnly; Secure; SameSite=None
+              description: Sets only the refreshToken httpOnly cookie. No accessToken cookie is set.
           content:
             application/json:
               schema:
@@ -81,6 +82,7 @@ paths:
                 properties:
                   accessToken:
                     type: string
+                    description: Short-lived JWT (15 min). Store in memory or localStorage. Send as Authorization Bearer token.
                     example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
                   user:
                     $ref: "#/components/schemas/UserResponse"
@@ -96,11 +98,11 @@ paths:
       tags: [Auth]
       summary: Refresh access token
       description: >
-        Rotates the refresh token (preventing replay attacks) and issues a fresh 15-minute access token.
-        Requires the HttpOnly refreshToken cookie.
+        Rotates the refresh token (preventing replay attacks) and issues a fresh 15-minute access token in the JSON body.
+        Requires the HttpOnly refreshToken cookie. Returns 403 if the Origin header is present and not in the CORS allowlist.
       responses:
         "200":
-          description: Token refreshed successfully
+          description: Token refreshed successfully. New access token is in the JSON body.
           headers:
             Set-Cookie:
               schema:
@@ -113,15 +115,18 @@ paths:
                 properties:
                   accessToken:
                     type: string
+                    description: Fresh 15-minute JWT. Store in memory or localStorage.
                     example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         "401":
           $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: Origin header present but not in the CORS allowlist
 
   /auth/logout:
     post:
       tags: [Auth]
       summary: Terminate session
-      description: Revokes the active refresh token and clears all authentication cookies.
+      description: Revokes the active refresh token and clears the refreshToken cookie. Returns 403 if the Origin header is not in the CORS allowlist.
       security:
         - BearerAuth: []
       responses:

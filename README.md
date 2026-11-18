@@ -338,12 +338,12 @@ All 9 query patterns were executed against live MongoDB Atlas data using `src/sc
      NEXT_PUBLIC_API_URL=https://doctor-tracker-backend.onrender.com/api
      ```
 2. Redeploy frontend on Vercel.
-3. The backend is pre-configured with dynamic CORS support for all `https://*.vercel.app` domains, so your preview and production deployments will immediately be authorized to transmit HttpOnly credentials.
+3. The backend enforces an **exact-origin CORS allowlist** via `CLIENT_ORIGIN`. Set it to your Vercel URL(s) separated by commas — no wildcards.
 
 ### Deployment Notes
 
 - **Trust proxy:** `app.set("trust proxy", 1)` is already set in `app.ts` for Render's reverse proxy layer. This ensures `req.ip` reflects the real client IP for rate limiting.
-- **CORS:** Set `CLIENT_ORIGIN` to your frontend's exact deployed URL (e.g. `https://my-app.vercel.app`). Never use `*` with `credentials: true`.
+- **CORS:** Set `CLIENT_ORIGIN` to your frontend's exact deployed URL (e.g. `https://my-app.vercel.app`). Wildcard `*` in `CLIENT_ORIGIN` will cause startup failure in production.
 - **Cookies:** The refresh cookie uses `SameSite=None; Secure`. Both frontend and backend **must** be on HTTPS in production — the browser will reject the cookie otherwise.
 - **Cold starts:** The Render free tier sleeps after inactivity (~1 min cold start on first request). Consider upgrading for production SLA requirements.
 - **MongoDB Atlas:** Whitelist `0.0.0.0/0` in Atlas Network Access for Render (dynamic IPs), or use Render's static outbound IPs on a paid plan.
@@ -360,7 +360,8 @@ All 9 query patterns were executed against live MongoDB Atlas data using `src/sc
 | **Body size** | 10 KB limit on all request bodies (`express.json({ limit: "10kb" })`) |
 | **Security headers** | `helmet` sets `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, `Strict-Transport-Security`, and more |
 | **Password storage** | `bcryptjs` with cost factor ≥ 10; `passwordHash` has `select: false` and is never returned in any response |
-| **Token security** | Dual-secret JWT; access token (15 min) + httpOnly refresh cookie (7 days) |
+| **Access token** | Returned **in the JSON response body only** (`{ accessToken }`). It is intentionally **not** set as a cookie — doing so would require CSRF mitigations and complicate SameSite logic. Clients store it in memory or `localStorage` and send as `Authorization: Bearer <token>`. |
+| **Refresh token** | httpOnly cookie, `path: /api/auth`, `SameSite=None; Secure` (production) / `Lax` (development). Rotated on every `/auth/refresh` call. |
+| **CORS** | **Exact-origin allowlist** (`src/middleware/corsGuard.ts`). No wildcards, no regex matching. Only origins in `CLIENT_ORIGIN` (comma-separated) are allowed, plus `http://localhost:3000` in non-production. `POST /auth/refresh` and `POST /auth/logout` return **403** if `Origin` header is present and not allowlisted. |
 | **User enumeration** | Dummy bcrypt compare on unknown email to equalize response timing |
 | **ReDoS** | `escapeRegex()` sanitizes all user-supplied search strings before regex compilation |
-| **CORS** | Allowlist-based origin check with `credentials: true`; never `*` |

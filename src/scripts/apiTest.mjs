@@ -3,16 +3,20 @@
  * Tests every endpoint in context/api-spec.md against live seeded data.
  * Run with: node src/scripts/apiTest.mjs
  *
- * Requires: server running on http://localhost:3000 (or PORT env var)
+ * Requires: server running on http://localhost:5000 (or PORT env var)
+ * Access token is returned in the JSON body (not a cookie).
+ * Refresh token is set as an httpOnly cookie (path /api/auth).
+ * Test-created documents (doctor, patient) are cleaned up at the end.
  */
 
-const BASE = `http://localhost:${process.env.PORT || 3000}/api`;
+const BASE = `http://localhost:${process.env.PORT || 5000}/api`;
 
 let accessToken = "";
 let refreshCookie = "";
 let testDoctorId = "";
 let testPatientId = "";
 let addedPatientId = ""; // from POST /doctors/:id/patients
+let createdDoctorId = ""; // cleanup: doctor created by test
 
 let passed = 0;
 let failed = 0;
@@ -37,17 +41,14 @@ async function req(method, path, body, headers = {}) {
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(`${BASE}${path}`, opts);
 
-  // Capture set-cookie header on login/refresh
+  // Access token is in the JSON body; refresh token is in the httpOnly cookie
   const setCookie = res.headers.get("set-cookie");
   if (setCookie) {
     const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
     for (const cookie of cookies) {
-      if (cookie.includes("accessToken=")) {
-        accessToken = cookie.split("accessToken=")[1].split(";")[0];
-      }
       if (cookie.includes("refreshToken=")) {
-        refreshCookie = cookie.split("refreshToken=")[1].split(";")[0];
-        refreshCookie = `refreshToken=${refreshCookie}`;
+        const val = cookie.split("refreshToken=")[1].split(";")[0];
+        refreshCookie = `refreshToken=${val}`;
       }
     }
   }
@@ -58,6 +59,12 @@ async function req(method, path, body, headers = {}) {
   } catch {
     json = {};
   }
+
+  // Capture access token from JSON body
+  if (json?.accessToken) {
+    accessToken = json.accessToken;
+  }
+
   return { status: res.status, json };
 }
 
@@ -115,7 +122,7 @@ async function run() {
       password: "AdminPassword123!",
     });
     log(
-      "POST /api/auth/login → 200 with accessToken cookie",
+      "POST /api/auth/login → 200 with accessToken in body",
       status === 200 && !!accessToken,
       `status=${status} hasToken=${!!accessToken}`
     );
@@ -135,7 +142,7 @@ async function run() {
   {
     const { status, json } = await req("POST", "/auth/refresh");
     log(
-      "POST /api/auth/refresh → 200 with new accessToken cookie",
+      "POST /api/auth/refresh → 200 with new accessToken in body",
       status === 200 && !!accessToken,
       `status=${status} hasToken=${!!accessToken}`
     );
@@ -223,7 +230,7 @@ async function run() {
       status === 201 && !!json?.data?._id,
       `status=${status} id=${json?.data?._id}`
     );
-    if (json?.data?._id) testDoctorId = json.data._id;
+    if (json?.data?._id) { testDoctorId = json.data._id; createdDoctorId = json.data._id; }
   }
 
   // GET /doctors/:id
@@ -440,6 +447,17 @@ async function run() {
   {
     const { status } = await req("POST", "/auth/logout");
     log("POST /api/auth/logout → 200", status === 200, `status=${status}`);
+  }
+
+  // ── Cleanup (delete test-created documents) ───────────────────
+  console.log("\n── Cleanup ──");
+  if (createdDoctorId) {
+    const { status } = await req("DELETE", `/doctors/${createdDoctorId}`);
+    log(
+      `DELETE /api/doctors/${createdDoctorId} (test cleanup)`,
+      status === 200 || status === 204 || status === 404,
+      `status=${status}`
+    );
   }
 
   // ── Summary ───────────────────────────────────────────────────

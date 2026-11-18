@@ -10,7 +10,15 @@ const envSchema = z.object({
   CLIENT_ORIGIN: z
     .string()
     .default("http://localhost:3000")
-    .transform((val) => val.split(",").map((s) => s.trim()).filter(Boolean)),
+    .transform((val) => val.split(",").map((s) => s.trim()).filter(Boolean))
+    .superRefine((origins, ctx) => {
+      if (process.env.NODE_ENV === "production" && origins.includes("*")) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "CLIENT_ORIGIN must not contain '*' in production",
+        });
+      }
+    }),
   JWT_ACCESS_SECRET: z.string().min(32, "JWT_ACCESS_SECRET must be at least 32 characters"),
   JWT_REFRESH_SECRET: z.string().min(32, "JWT_REFRESH_SECRET must be at least 32 characters"),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),

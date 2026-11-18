@@ -90,5 +90,41 @@
 ## Known issues / next steps
 - All 10 phases (P1 through P10) are 100% complete, fully verified, and production-ready.
 - 9/9 query index executions confirmed IXSCAN (zero COLLSCAN).
-- 33/33 E2E test cases passed against live Atlas database.
+- 34/34 E2E test cases passed against live Atlas database (after security hardening).
 - Ready for immediate one-click deployment to Render and pairing with Vercel frontend.
+
+## Security Hardening (post-audit fixes — 2026-11-18)
+
+### Fix 1: CORS Exact-Origin Allowlist
+- Removed `*.vercel.app` regex wildcards and `*` wildcard support entirely.
+- `src/middleware/corsGuard.ts` — single source of truth for `isOriginAllowed()`.
+- In production `CLIENT_ORIGIN` containing `*` causes startup failure (Zod `.superRefine()`).
+- `POST /auth/refresh` and `POST /auth/logout` return 403 if `Origin` header present and not allowlisted (`requireAllowedOrigin` middleware).
+- `http://localhost:3000` allowed only when `NODE_ENV !== "production"`.
+
+### Fix 2: Access Token Delivery
+- Access token is returned **only in the JSON response body** (`{ accessToken, user }`).
+- Removed `accessToken` httpOnly cookie entirely from login, refresh, and logout.
+- `refreshToken` httpOnly cookie: `path: /api/auth`, `SameSite=None+Secure` (prod), `Lax` (dev).
+- `requireAuth` middleware: **Bearer token only** — cookie fallback removed.
+- Clients must store the access token in memory / `localStorage` and send as `Authorization: Bearer <token>`.
+
+### Fix 3: Secrets Hygiene
+- `.env` confirmed gitignored.
+- Working tree scan: no real credentials found (README has only `mongodb+srv://...` placeholder).
+- `render.yaml`: all 4 secrets (`MONGODB_URI`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `CLIENT_ORIGIN`) have `sync: false` with no literal values.
+- `AGENTS.md` updated: "Never read, open, or print `.env` or any file that contains secret values."
+
+### Fix 4: Data Cleanup
+- Extra doctor identified: `_id: 6afd4316d5c150e2898780eb`, `test.doctor.p9.1794982678844@careguide.bd` (leftover from previous test run). **Awaiting user approval to delete.**
+- `apiTest.mjs` now tracks `createdDoctorId` and deletes it in a cleanup section after logout.
+
+### Fix 5: Verification Results
+- `typecheck`: ✅ PASS
+- `lint`: ✅ PASS
+- `build`: ✅ PASS
+- Evil origin (`https://evil.vercel.app`) on `/auth/refresh`: HTTP 403, no ACAO header ✅
+- Evil origin on `/api/doctors`: no ACAO header ✅
+- `http://localhost:3000` → `Access-Control-Allow-Origin: http://localhost:3000` ✅
+- Login response: 1 cookie (`refreshToken` only), `accessToken` in body ✅
+- 34/34 tests passed ✅

@@ -23,6 +23,7 @@ Read in this exact order before any implementation:
 - Controllers are thin. Business and query logic lives in `services/`. No DB calls in controllers.
 - Every list query is paginated, projected, `.lean()`, and backed by an index. Prove it with `explain("executionStats")`.
 - Never return `passwordHash`. Never log secrets or tokens.
+- Never read, open, or print `.env` or any file that contains secret values. Check only that the variable NAME exists.
 - Update `progress-tracker.md` and `api-spec.md` after every feature.
 - Before using any third-party library, load its installed skill (if one exists), then read `context/library-docs.md`.
 - If the same problem persists after one corrective prompt, stop immediately and run /recover.
